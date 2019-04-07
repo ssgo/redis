@@ -1,0 +1,11 @@
+github.com/gomodule/redigo v2.0.0+incompatible h1:K/R+8tc58AaqLkqG2Ol3Qk+DR/TlNuhuh457pBFPtt0=
+github.com/gomodule/redigo v2.0.0+incompatible/go.mod h1:B4C85qUVwatsJoIUNIfCRsp7qO0iAmpGFZ4EELWSbC4=
+github.com/ssgo/config v0.0.1 h1:C0Ej11lyI8uHJ0e9SI9+FA+ncfmYFXc3J++c5mSjMDI=
+github.com/ssgo/config v0.0.1/go.mod h1:GvdGgMnxweRRAc3xdLnudoUrKHqp06w2BZ/ryo/i7qg=
+github.com/ssgo/log v0.0.2 h1:kmNgulh6AVJAfCeSMqswAI1RyCQWr5JNvCiZqeyFY+E=
+github.com/ssgo/log v0.0.2/go.mod h1:UPXh6PNZq0TR9F8b0AlRv++PF7Bb8qQu2jyVisOldTg=
+github.com/ssgo/standard v0.0.1 h1:+2ppe8qVrtgvGPT2SqAFiCzhM4R8fraDD+VjffyiAsY=
+github.com/ssgo/standard v0.0.1/go.mod h1:l2rfCA+9gQpV/7enSRPJVCa5MZzMTfBkEUw9q+TyBkI=
+github.com/ssgo/utility v0.0.1/go.mod h1:QXq5PDXBRQDS09x09VF6x6NmuvQZcInEH9U43IwftCg=
+github.com/ssgo/utility v0.0.2 h1:La+QSwWPI37pb2t+L6ijRch8b1fQLDpJv8vKvgIoraI=
+github.com/ssgo/utility v0.0.2/go.mod h1:QXq5PDXBRQDS09x09VF6x6NmuvQZcInEH9U43IwftCg=
