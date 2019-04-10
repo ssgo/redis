@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/ssgo/utility"
+	"github.com/ssgo/u"
 )
 
 type Result struct {
@@ -217,7 +217,7 @@ func (rs *Result) To(result interface{}) error {
 	var err error = nil
 	if rs.bytesData != nil {
 		if len(rs.bytesData) > 0 {
-			utility.FixUpperCase(rs.bytesData)
+			u.FixUpperCase(rs.bytesData)
 			err = json.Unmarshal(rs.bytesData, result)
 			if err != nil {
 				log.Error("Redis", "error", err)

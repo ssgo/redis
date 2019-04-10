@@ -12,7 +12,7 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/ssgo/config"
-	"github.com/ssgo/utility"
+	"github.com/ssgo/u"
 )
 
 type redisConfig struct {
@@ -52,10 +52,6 @@ var enabledLogs = true
 
 func EnableLogs(enabled bool) {
 	enabledLogs = enabled
-}
-
-func MakePasswd(passwd string) string {
-	return utility.EncryptAes(passwd, settedKey, settedIv)
 }
 
 var redisConfigs = make(map[string]*redisConfig)
@@ -136,7 +132,7 @@ func GetRedis(name string) *Redis {
 	}
 	decryptedPassword := ""
 	if conf.Password != "" {
-		decryptedPassword = utility.DecryptAes(conf.Password, settedKey, settedIv)
+		decryptedPassword = u.DecryptAes(conf.Password, settedKey, settedIv)
 	}
 	var redisReadTimeout time.Duration
 	conn := &redis.Pool{
@@ -235,13 +231,13 @@ func _do(conn redis.Conn, cmd string, values ...interface{}) *Result {
 			r.keys = make([]string, len(values)-1)
 			for i, v := range values {
 				if i > 0 {
-					r.keys[i-1] = utility.String(v)
+					r.keys[i-1] = u.String(v)
 				}
 			}
 		} else if cmd == "MGET" {
 			r.keys = make([]string, len(values))
 			for i, v := range values {
-				r.keys[i] = utility.String(v)
+				r.keys[i] = u.String(v)
 			}
 		}
 

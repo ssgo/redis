@@ -1,8 +1,7 @@
-package redis
+package redis_test
 
 import (
-	"fmt"
-	"os"
+	"github.com/ssgo/redis"
 	"testing"
 	"time"
 )
@@ -14,26 +13,8 @@ type userInfo struct {
 	Time  time.Time
 }
 
-func TestMakePasswd(t *testing.T) {
-	password := ""
-	encrypted := ""
-	args := os.Args
-	fmt.Println("passwd", args, "length", len(args))
-	for i, arg := range args {
-		if arg == "passwd" {
-			j := i + 1
-			if len(args) > j {
-				password = args[j]
-				encrypted = MakePasswd(password)
-			}
-			break
-		}
-	}
-	fmt.Println("Redis encrypted `" + password + "` is:" + encrypted)
-}
-
 func TestBase(t *testing.T) {
-	redis := GetRedis("test")
+	redis := redis.GetRedis("test")
 	if redis.Error != nil {
 		t.Error("GetRedis error", redis)
 		return
@@ -166,8 +147,8 @@ func TestBase(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	redis := GetRedis("localhost:6379:2:1000:500")
-	fmt.Println(redis.Config)
+	redis := redis.GetRedis("localhost:6379:2:1000:500")
+	//fmt.Println(redis.Config)
 	if redis.Error != nil {
 		t.Error("GetRedis error", redis)
 		return
@@ -186,7 +167,7 @@ func TestConfig(t *testing.T) {
 }
 
 func TestHash(t *testing.T) {
-	redis := GetRedis("test")
+	redis := redis.GetRedis("test")
 	if redis.Error != nil {
 		t.Error("GetRedis error", redis)
 		return

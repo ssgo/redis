@@ -1,9 +1,113 @@
-package main
+package redis
 
-import "github.com/ssgo/s/redis"
+import "github.com/ssgo/redis"
+
+// install sskey tool
+// go get -u github.com/ssgo/tool/sskey
+
+// create key
+// sskey -c yourKeyName
+
+// get encrypt code, than put it to redisInit.go file
+// sskey -o yourKeyName
+
+// encrypt a password
+// sskey -e yourKeyName yourPassword
 
 func init() {
-	key := []byte("vpL54DlR2KG{JSAaAX7Tu;*#&DnG`M0o")
-	iv := []byte("@z]zv@10-K.5Al0Dm`@foq9k\"VRfJ^~j")
-	redis.SetEncryptKeys(key, iv)
+	key := make([]byte, 0)
+	iv := make([]byte, 0)
+
+	key = append(key, 176, 72, 158, 98, 166, 116, 183, 140, 144, 210)
+	key = append(key, 96, 143, 59, 196, 194, 29, 111, 207, 6, 138)
+	key = append(key, 196, 67, 80, 143, 137, 217, 192, 206, 113, 120)
+	key = append(key, 185, 69, 94, 160, 142, 146, 142, 173, 115, 220)
+
+	iv = append(iv, 84, 102, 160, 148, 164, 102, 77, 112, 139, 238)
+	iv = append(iv, 57, 147, 64, 89, 127, 104, 147, 110, 165, 58)
+	iv = append(iv, 87, 176, 109, 56, 164, 150, 59, 138, 124, 182)
+	iv = append(iv, 181, 207, 156, 208, 29, 239, 168, 223, 200, 230)
+
+	key[39] = byte(int(key[39]) - 121)
+	iv[39] = byte(int(iv[39]) - -15)
+	key[38] = byte(int(key[38]) - -119)
+	iv[38] = byte(int(iv[38]) - 83)
+	key[37] = byte(int(key[37]) - -23)
+	iv[37] = byte(int(iv[37]) - 125)
+	key[36] = byte(int(key[36]) - 71)
+	iv[36] = byte(int(iv[36]) - 52)
+	key[35] = byte(int(key[35]) - -63)
+	iv[35] = byte(int(iv[35]) - -6)
+	key[34] = byte(int(key[34]) - -99)
+	iv[34] = byte(int(iv[34]) - -118)
+	key[33] = byte(int(key[33]) - -1)
+	iv[33] = byte(int(iv[33]) - -12)
+	key[32] = byte(int(key[32]) - -64)
+	iv[32] = byte(int(iv[32]) - 89)
+	key[31] = byte(int(key[31]) - -97)
+	iv[31] = byte(int(iv[31]) - -37)
+	key[30] = byte(int(key[30]) - -35)
+	iv[30] = byte(int(iv[30]) - 102)
+	key[29] = byte(int(key[29]) - 4)
+	iv[29] = byte(int(iv[29]) - -39)
+	key[28] = byte(int(key[28]) - -125)
+	iv[28] = byte(int(iv[28]) - 37)
+	key[27] = byte(int(key[27]) - -36)
+	iv[27] = byte(int(iv[27]) - -69)
+	key[26] = byte(int(key[26]) - 75)
+	iv[26] = byte(int(iv[26]) - 30)
+	key[25] = byte(int(key[25]) - 100)
+	iv[25] = byte(int(iv[25]) - -93)
+	key[24] = byte(int(key[24]) - 60)
+	iv[24] = byte(int(iv[24]) - -82)
+	key[23] = byte(int(key[23]) - -74)
+	iv[23] = byte(int(iv[23]) - 47)
+	key[22] = byte(int(key[22]) - 38)
+	iv[22] = byte(int(iv[22]) - 3)
+	key[21] = byte(int(key[21]) - -70)
+	iv[21] = byte(int(iv[21]) - 77)
+	key[20] = byte(int(key[20]) - -3)
+	iv[20] = byte(int(iv[20]) - -88)
+	key[19] = byte(int(key[19]) - -91)
+	iv[19] = byte(int(iv[19]) - -109)
+	key[18] = byte(int(key[18]) - 0)
+	iv[18] = byte(int(iv[18]) - 41)
+	key[17] = byte(int(key[17]) - -46)
+	iv[17] = byte(int(iv[17]) - -29)
+	key[16] = byte(int(key[16]) - -43)
+	iv[16] = byte(int(iv[16]) - -103)
+	key[15] = byte(int(key[15]) - -114)
+	iv[15] = byte(int(iv[15]) - -86)
+	key[14] = byte(int(key[14]) - -50)
+	iv[14] = byte(int(iv[14]) - -120)
+	key[13] = byte(int(key[13]) - -28)
+	iv[13] = byte(int(iv[13]) - 87)
+	key[12] = byte(int(key[12]) - -112)
+	iv[12] = byte(int(iv[12]) - -110)
+	key[11] = byte(int(key[11]) - -90)
+	iv[11] = byte(int(iv[11]) - -20)
+	key[10] = byte(int(key[10]) - 90)
+	iv[10] = byte(int(iv[10]) - -120)
+	key[9] = byte(int(key[9]) - -43)
+	iv[9] = byte(int(iv[9]) - -6)
+	key[8] = byte(int(key[8]) - 70)
+	iv[8] = byte(int(iv[8]) - -91)
+	key[7] = byte(int(key[7]) - 66)
+	iv[7] = byte(int(iv[7]) - -33)
+	key[6] = byte(int(key[6]) - 99)
+	iv[6] = byte(int(iv[6]) - -100)
+	key[5] = byte(int(key[5]) - 65)
+	iv[5] = byte(int(iv[5]) - -119)
+	key[4] = byte(int(key[4]) - -30)
+	iv[4] = byte(int(iv[4]) - -62)
+	key[3] = byte(int(key[3]) - -120)
+	iv[3] = byte(int(iv[3]) - -21)
+	key[2] = byte(int(key[2]) - -7)
+	iv[2] = byte(int(iv[2]) - -85)
+	key[1] = byte(int(key[1]) - -85)
+	iv[1] = byte(int(iv[1]) - 2)
+	key[0] = byte(int(key[0]) - 79)
+	iv[0] = byte(int(iv[0]) - 81)
+
+	redis.SetEncryptKeys(key[2:], iv[5:])
 }
