@@ -15,7 +15,7 @@ import (
 	"github.com/ssgo/u"
 )
 
-type redisConfig struct {
+type Config struct {
 	Host         string
 	Password     string
 	DB           int
@@ -30,7 +30,7 @@ type redisConfig struct {
 type Redis struct {
 	pool        *redis.Pool
 	ReadTimeout int
-	Config      *redisConfig
+	Config      *Config
 	Error       error
 }
 
@@ -54,7 +54,7 @@ func EnableLogs(enabled bool) {
 	enabledLogs = enabled
 }
 
-var redisConfigs = make(map[string]*redisConfig)
+var redisConfigs = make(map[string]*Config)
 var redisInstances = make(map[string]*Redis)
 
 func GetRedis(name string) *Redis {
@@ -80,7 +80,7 @@ func GetRedis(name string) *Redis {
 
 	conf := redisConfigs[name]
 	if conf == nil {
-		conf = new(redisConfig)
+		conf = new(Config)
 		redisConfigs[name] = conf
 
 		if len(args) > 1 {
@@ -130,6 +130,13 @@ func GetRedis(name string) *Redis {
 	if conf.WriteTimeout == 0 {
 		conf.WriteTimeout = 10000
 	}
+
+	redis := NewRedis(conf)
+	redisInstances[fullName] = redis
+	return redis
+}
+
+func NewRedis(conf *Config) *Redis{
 	decryptedPassword := ""
 	if conf.Password != "" {
 		decryptedPassword = u.DecryptAes(conf.Password, settedKey, settedIv)
@@ -166,7 +173,6 @@ func GetRedis(name string) *Redis {
 	redis.pool = conn
 	redis.Config = conf
 
-	redisInstances[fullName] = redis
 	return redis
 }
 
