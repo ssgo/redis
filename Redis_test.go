@@ -31,6 +31,7 @@ func TestBase(t *testing.T) {
 	}
 
 	redis.SET("rtestName", "12345")
+
 	r = redis.GETSET("rtestName", 12345)
 	if r.Error != nil && r.String() != "12345" {
 		t.Error("String", r)
@@ -59,6 +60,39 @@ func TestBase(t *testing.T) {
 	}
 	if r.Float() != 12345 {
 		t.Error("Float", r)
+	}
+	//过期测试 测试小于315360000(3650天)的unix时间戳
+	expireFlag := redis.EXPIRE("rtestName", 1)
+	if !expireFlag {
+		t.Error("Expire Bool", expireFlag)
+	}
+	time.Sleep(time.Duration(2) * time.Second)
+	r = redis.GET("rtestName")
+	if r.Int() > 0 {
+		t.Error("Expired err", r)
+	}
+
+	//过期测试 测试小于3650天的unix时间戳
+	redis.SET("rtestName", 12)
+	//2019-01-01
+	expireFlag = redis.EXPIRE("rtestName", 1546272000)
+	if !expireFlag {
+		t.Error("ExpireAt Bool", expireFlag)
+	}
+	r = redis.GET("rtestName")
+	if r.Int() > 0 {
+		t.Error("ExpireAt err", r)
+	}
+
+	redis.SET("rtestName", 16)
+	//2030-01-01
+	expireFlag = redis.EXPIRE("rtestName", 1893427200)
+	if !expireFlag {
+		t.Error("ExpireAt Bool", expireFlag)
+	}
+	r = redis.GET("rtestName")
+	if r.Int() != 16 {
+		t.Error("ExpireAt err", r)
 	}
 
 	redis.SET("rtestName", 12345.67)

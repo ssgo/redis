@@ -14,11 +14,11 @@ func (this *Redis) DEL(keys ...string) int {
 func (this *Redis) EXISTS(key string) bool {
 	return this.Do("EXISTS", key).Bool()
 }
-func (this *Redis) EXPIRE(key string, seconds int) bool {
-	if seconds > 315360000 {
-		return this.Do("EXPIREAT", key).Bool()
+func (this *Redis) EXPIRE(key string, second int) bool {
+	if second > 315360000 {
+		return this.Do("EXPIREAT", key, second).Bool()
 	} else {
-		return this.Do("EXISTS", key).Bool()
+		return this.Do("EXPIRE", key, second).Bool()
 	}
 }
 func (this *Redis) KEYS(patten string) []string {
