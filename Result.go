@@ -2,7 +2,6 @@ package redis
 
 import (
 	"encoding/json"
-	"github.com/ssgo/log"
 	"reflect"
 	"strconv"
 
@@ -219,9 +218,6 @@ func (rs *Result) To(result interface{}) error {
 		if len(rs.bytesData) > 0 {
 			u.FixUpperCase(rs.bytesData)
 			err = json.Unmarshal(rs.bytesData, result)
-			if err != nil {
-				log.Error("Redis", "error", err)
-			}
 		}
 	} else {
 		t := reflect.TypeOf(result)

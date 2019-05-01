@@ -15,6 +15,8 @@ import (
 	"github.com/ssgo/u"
 )
 
+var passwords = map[string]string{}
+
 type Config struct {
 	Host         string
 	Password     string
@@ -25,12 +27,18 @@ type Config struct {
 	ConnTimeout  int
 	ReadTimeout  int
 	WriteTimeout int
+	LogSlow      int
+}
+
+func (conf *Config) Dsn() string {
+	return fmt.Sprintf("%s:****:%d", conf.Host, conf.DB)
 }
 
 type Redis struct {
 	pool        *redis.Pool
 	ReadTimeout int
 	Config      *Config
+	logger      *log.Logger
 	Error       error
 }
 
@@ -48,22 +56,31 @@ func SetEncryptKeys(key, iv []byte) {
 	}
 }
 
-var enabledLogs = true
-
-func EnableLogs(enabled bool) {
-	enabledLogs = enabled
-}
+//var enabledLogs = true
+//
+//func EnableLogs(enabled bool) {
+//	enabledLogs = enabled
+//}
 
 var redisConfigs = make(map[string]*Config)
 var redisInstances = make(map[string]*Redis)
 
-func GetRedis(name string) *Redis {
+func GetRedis(name string, logger *log.Logger) *Redis {
+	if logger == nil {
+		logger = log.DefaultLogger
+	}
+
 	if redisInstances[name] != nil {
-		return redisInstances[name]
+		return copyByLogger(redisInstances[name], logger)
 	}
 
 	if len(redisConfigs) == 0 {
-		config.LoadConfig("redis", &redisConfigs)
+		errs := config.LoadConfig("redis", &redisConfigs)
+		if errs != nil {
+			for _, err := range errs {
+				logger.Error(err.Error())
+			}
+		}
 	}
 
 	fullName := name
@@ -115,6 +132,10 @@ func GetRedis(name string) *Redis {
 		}
 	}
 
+	passId := u.UniqueId()
+	passwords[passId] = conf.Password
+	conf.Password = passId
+
 	if conf.Host == "" {
 		conf.Host = "127.0.0.1:6379"
 	}
@@ -130,17 +151,41 @@ func GetRedis(name string) *Redis {
 	if conf.WriteTimeout == 0 {
 		conf.WriteTimeout = 10000
 	}
+	if conf.LogSlow == 0 {
+		conf.LogSlow = 100
+	}
 
-	redis := NewRedis(conf)
+	redis := NewRedis(conf, nil)
 	redisInstances[fullName] = redis
-	return redis
+	return copyByLogger(redis, logger)
 }
 
-func NewRedis(conf *Config) *Redis{
-	decryptedPassword := ""
-	if conf.Password != "" {
-		decryptedPassword = u.DecryptAes(conf.Password, settedKey, settedIv)
+func copyByLogger(fromRedis *Redis, logger *log.Logger) *Redis {
+	newRedis := new(Redis)
+	newRedis.ReadTimeout = fromRedis.ReadTimeout
+	newRedis.pool = fromRedis.pool
+	newRedis.Config = fromRedis.Config
+	if logger == nil {
+		newRedis.logger = log.DefaultLogger
+	} else {
+		newRedis.logger = logger
 	}
+	return newRedis
+}
+
+func NewRedis(conf *Config, logger *log.Logger) *Redis {
+	if logger == nil {
+		logger = log.DefaultLogger
+	}
+
+	encryptedPassword := passwords[conf.Password]
+	decryptedPassword := ""
+	if encryptedPassword != "" {
+		decryptedPassword = u.DecryptAes(encryptedPassword, settedKey, settedIv)
+	} else {
+		logger.Warning("Password is empty")
+	}
+
 	var redisReadTimeout time.Duration
 	conn := &redis.Pool{
 		MaxIdle:     conf.MaxIdles,
@@ -160,7 +205,7 @@ func NewRedis(conf *Config) *Redis{
 				redis.DialPassword(decryptedPassword),
 			)
 			if err != nil {
-				log.Error("Redis", "error", err)
+				logger.DBError(err.Error(), "redis", conf.Dsn(), "", nil, 0)
 				return nil, err
 			}
 			//c.Do("SELECT", REDIS_DB)
@@ -172,8 +217,25 @@ func NewRedis(conf *Config) *Redis{
 	redis.ReadTimeout = conf.ReadTimeout
 	redis.pool = conn
 	redis.Config = conf
+	if logger == nil {
+		redis.logger = log.DefaultLogger
+	} else {
+		redis.logger = logger
+	}
 
 	return redis
+}
+
+func (rd *Redis) LogError(error string) {
+	rd.logger.DBError(error, "redis", rd.Config.Dsn(), "", nil, 0)
+}
+
+func (rd *Redis) LogQuery(query string, args []interface{}, usedTime float32) {
+	rd.logger.DB("redis", rd.Config.Dsn(), query, args, usedTime)
+}
+
+func (rd *Redis) LogQueryError(error string, query string, args []interface{}, usedTime float32) {
+	rd.logger.DBError(error, "redis", rd.Config.Dsn(), query, args, usedTime)
 }
 
 func (rd *Redis) Destroy() error {
@@ -181,7 +243,9 @@ func (rd *Redis) Destroy() error {
 		return fmt.Errorf("operat on a bad redis pool")
 	}
 	err := rd.pool.Close()
-	log.Error("Redis", "error", err)
+	if err != nil {
+		rd.LogError(err.Error())
+	}
 	return err
 }
 
@@ -198,18 +262,43 @@ func (rd *Redis) GetConnection() redis.Conn {
 
 func (rd *Redis) Do(cmd string, values ...interface{}) *Result {
 	if rd.pool == nil {
-		return &Result{Error: fmt.Errorf("operat on a bad redis pool")}
+		err := errors.New("operat on a bad redis pool")
+		rd.LogQueryError(err.Error(), cmd, values, 0)
+		return &Result{Error: err}
 	}
+	startTime := time.Now()
 	conn := rd.pool.Get()
 	if conn.Err() != nil {
+		rd.LogError(conn.Err().Error())
 		return &Result{Error: conn.Err()}
 	}
-	r := _do(conn, cmd, values...)
-	conn.Close()
+	r := rd.do(conn, cmd, values...)
+	_ = conn.Close()
+	usedTime := log.MakeUesdTime(startTime, time.Now())
+	if r.Error == nil {
+		if rd.Config.LogSlow == -1 || usedTime >= float32(rd.Config.LogSlow) {
+			// 记录慢请求日志
+			rd.LogQuery(cmd, values, usedTime)
+		}
+	} else {
+		rd.LogQueryError(r.Error.Error(), cmd, values, usedTime)
+	}
 	return r
 }
 
-func _do(conn redis.Conn, cmd string, values ...interface{}) *Result {
+func (rd *Redis) do(conn redis.Conn, cmd string, values ...interface{}) *Result {
+	cmdArr := strings.Split(cmd, " ")
+	if len(cmdArr) > 1 {
+		cmd = cmdArr[0]
+		args := make([]interface{}, 0)
+		for i := 1; i < len(cmdArr); i++ {
+			args = append(args, cmdArr[i])
+		}
+		if len(values) > 0 {
+			args = append(args, values...)
+		}
+		values = args
+	}
 	if strings.Contains(cmd, "MSET") {
 		n := len(values)
 		for i := n - 1; i > 0; i -= 2 {
@@ -220,7 +309,6 @@ func _do(conn redis.Conn, cmd string, values ...interface{}) *Result {
 	}
 	replyData, err := conn.Do(cmd, values...)
 	if err != nil {
-		log.Error("Redis", "error", err)
 		return &Result{Error: err}
 	}
 
@@ -264,8 +352,7 @@ func _do(conn redis.Conn, cmd string, values ...interface{}) *Result {
 						case string:
 							r.bytesDatas[i2] = []byte(subRealValue)
 						default:
-
-							log.Error("Redis", "error", fmt.Sprint("unknown reply type", cmd, i, v))
+							rd.LogError(fmt.Sprint("unknown reply type", cmd, i, v))
 							r.bytesDatas[i2] = make([]byte, 0)
 							r.Error = err
 						}
@@ -283,9 +370,8 @@ func _do(conn redis.Conn, cmd string, values ...interface{}) *Result {
 					case string:
 						r.bytesDatas[i] = []byte(subRealValue)
 					default:
-						log.Error("Redis", "error", fmt.Sprint("unknown reply type", cmd, i, v))
 						r.bytesDatas[i] = make([]byte, 0)
-						r.Error = err
+						r.Error = errors.New(fmt.Sprint("unknown reply type", cmd, i, v))
 					}
 				}
 			}
@@ -295,7 +381,6 @@ func _do(conn redis.Conn, cmd string, values ...interface{}) *Result {
 	default:
 		err := fmt.Sprint("unknown reply type", cmd, reflect.TypeOf(replyData), replyData)
 		r.Error = errors.New(err)
-		log.Error("Redis", "error", err)
 		r.bytesData = make([]byte, 0)
 	}
 	return r

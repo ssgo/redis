@@ -14,7 +14,8 @@ type userInfo struct {
 }
 
 func TestBase(t *testing.T) {
-	redis := redis.GetRedis("test")
+	redis := redis.GetRedis("test", nil)
+	redis.Config.LogSlow = -1
 	if redis.Error != nil {
 		t.Error("GetRedis error", redis)
 		return
@@ -181,7 +182,7 @@ func TestBase(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	redis := redis.GetRedis("localhost:6379:2:1000:500")
+	redis := redis.GetRedis("localhost:6379:2:1000:500", nil)
 	//fmt.Println(redis.Config)
 	if redis.Error != nil {
 		t.Error("GetRedis error", redis)
@@ -201,7 +202,7 @@ func TestConfig(t *testing.T) {
 }
 
 func TestHash(t *testing.T) {
-	redis := redis.GetRedis("test")
+	redis := redis.GetRedis("test", nil)
 	if redis.Error != nil {
 		t.Error("GetRedis error", redis)
 		return
