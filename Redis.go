@@ -78,7 +78,7 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 		errs := config.LoadConfig("redis", &redisConfigs)
 		if errs != nil {
 			for _, err := range errs {
-				logger.Error(err.Error())
+				log.DefaultLogger.Error(err.Error())
 			}
 		}
 	}
@@ -155,9 +155,9 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 		conf.LogSlow = 100
 	}
 
-	redis := NewRedis(conf, nil)
-	redisInstances[fullName] = redis
-	return copyByLogger(redis, logger)
+	rd := NewRedis(conf, nil)
+	redisInstances[fullName] = rd
+	return copyByLogger(rd, logger)
 }
 
 func copyByLogger(fromRedis *Redis, logger *log.Logger) *Redis {
@@ -183,7 +183,7 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 	if encryptedPassword != "" {
 		decryptedPassword = u.DecryptAes(encryptedPassword, settedKey, settedIv)
 	} else {
-		logger.Warning("Password is empty")
+		log.DefaultLogger.Warning("Password is empty")
 	}
 
 	var redisReadTimeout time.Duration
@@ -205,7 +205,7 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 				redis.DialPassword(decryptedPassword),
 			)
 			if err != nil {
-				logger.DBError(err.Error(), "redis", conf.Dsn(), "", nil, 0)
+				log.DefaultLogger.DBError(err.Error(), "redis", conf.Dsn(), "", nil, 0)
 				return nil, err
 			}
 			//c.Do("SELECT", REDIS_DB)
@@ -213,17 +213,25 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 		},
 	}
 
-	redis := new(Redis)
-	redis.ReadTimeout = conf.ReadTimeout
-	redis.pool = conn
-	redis.Config = conf
+	rd := new(Redis)
+	rd.ReadTimeout = conf.ReadTimeout
+	rd.pool = conn
+	rd.Config = conf
 	if logger == nil {
-		redis.logger = log.DefaultLogger
+		rd.logger = log.DefaultLogger
 	} else {
-		redis.logger = logger
+		rd.logger = logger
 	}
 
-	return redis
+	return rd
+}
+
+func (rd *Redis) SetLogger(logger *log.Logger) {
+	rd.logger = logger
+}
+
+func (rd *Redis) GetLogger() *log.Logger {
+	return rd.logger
 }
 
 func (rd *Redis) LogError(error string) {

@@ -216,7 +216,7 @@ func (rs *Result) To(result interface{}) error {
 	var err error = nil
 	if rs.bytesData != nil {
 		if len(rs.bytesData) > 0 {
-			u.FixUpperCase(rs.bytesData)
+			u.FixUpperCase(rs.bytesData, nil)
 			err = json.Unmarshal(rs.bytesData, result)
 		}
 	} else {
