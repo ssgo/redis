@@ -75,8 +75,12 @@ func (rs *Result) String() string {
 	return string(rs.bytes())
 }
 func (rs *Result) Bool() bool {
-	switch rs.String() {
+	s := rs.String()
+	switch s {
 	case "1", "t", "T", "true", "TRUE", "True", "ok", "OK", "Ok", "yes", "YES", "Yes":
+		return true
+	}
+	if s == "0" && rs.Error == nil {
 		return true
 	}
 	return false
