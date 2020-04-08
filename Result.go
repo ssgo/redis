@@ -80,9 +80,9 @@ func (rs *Result) Bool() bool {
 	case "1", "t", "T", "true", "TRUE", "True", "ok", "OK", "Ok", "yes", "YES", "Yes":
 		return true
 	}
-	if s == "0" && rs.Error == nil {
-		return true
-	}
+	//if s == "0" && rs.Error == nil {
+	//	return true
+	//}
 	return false
 }
 func (rs *Result) Ints() []int {

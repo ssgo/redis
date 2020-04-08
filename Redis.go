@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ssgo/log"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -84,6 +85,112 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 	}
 
 	fullName := name
+
+	var conf *Config
+	if strings.HasPrefix(name, "redis://") {
+		conf = parseByURL(name, logger)
+	} else {
+		conf = parseByName(name)
+	}
+
+	passId := u.UniqueId()
+	passwords[passId] = conf.Password
+	conf.Password = passId
+
+	if conf.Host == "" {
+		conf.Host = "127.0.0.1:6379"
+	}
+	if conf.ConnTimeout == 0 {
+		conf.ConnTimeout = 10000
+	}
+	if conf.ReadTimeout == 0 {
+		conf.ReadTimeout = 10000
+	}
+	if conf.WriteTimeout == 0 {
+		conf.WriteTimeout = 10000
+	}
+	if conf.LogSlow == 0 {
+		conf.LogSlow = 100
+	}
+
+	rd := NewRedis(conf, nil)
+	redisInstances[fullName] = rd
+	return copyByLogger(rd, logger)
+}
+
+func parseByURL(name string, logger *log.Logger) *Config {
+	conf := redisConfigs[name]
+	if conf == nil {
+		conf = new(Config)
+		redisConfigs[name] = conf
+
+		urlInfo, err := url.Parse(name)
+		if err != nil {
+			logger.Error(err.Error(), "url", name)
+			return conf
+		}
+		if urlInfo.Scheme != "redis" {
+			logger.Error("unsupported scheme", "url", name)
+			return conf
+		}
+
+		conf.Host = urlInfo.Host
+
+		dbStr := urlInfo.Query().Get("database")
+		if dbStr == "" && len(urlInfo.Path) > 1 {
+			dbStr = urlInfo.Path[1:]
+		}
+		if len(dbStr) > 0 {
+			db, err := strconv.Atoi(dbStr)
+			if err != nil {
+				logger.Error(err.Error(), "url", name)
+			}
+			if err == nil && db > 0 && db <= 15 {
+				conf.DB = db
+			}
+		}
+
+		pwd, _ := urlInfo.User.Password()
+		if pwd != "" {
+			conf.Password = pwd
+		}
+
+		timeout := urlInfo.Query().Get("timeout")
+		if timeout != "" {
+			timeoutValue := 0
+			timeoutUnit := time.Millisecond
+			if strings.HasSuffix(timeout, "ms") {
+				timeoutUnit = time.Millisecond
+				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+			} else if strings.HasSuffix(timeout, "us") {
+				timeoutUnit = time.Microsecond
+				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+			} else if strings.HasSuffix(timeout, "ns") {
+				timeoutUnit = time.Nanosecond
+				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+			} else if strings.HasSuffix(timeout, "s") {
+				timeoutUnit = time.Second
+				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+			} else if strings.HasSuffix(timeout, "m") {
+				timeoutUnit = time.Minute
+				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+			} else {
+				timeoutValue, err = strconv.Atoi(timeout)
+			}
+			if err != nil {
+				logger.Error(err.Error(), "url", name)
+			}else{
+				timeoutMsValue := int( time.Duration(timeoutValue) * timeoutUnit / time.Millisecond)
+				conf.ConnTimeout = timeoutMsValue
+				conf.ReadTimeout = timeoutMsValue
+				conf.WriteTimeout = timeoutMsValue
+			}
+		}
+	}
+	return conf
+}
+
+func parseByName(name string) *Config {
 	// config name support Host:Port
 	args := strings.Split(name, ":")
 	db := 0
@@ -132,32 +239,11 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 		}
 	}
 
-	passId := u.UniqueId()
-	passwords[passId] = conf.Password
-	conf.Password = passId
-
-	if conf.Host == "" {
-		conf.Host = "127.0.0.1:6379"
-	}
 	if conf.DB == 0 && db > 0 && db <= 15 {
 		conf.DB = db
 	}
-	if conf.ConnTimeout == 0 {
-		conf.ConnTimeout = 10000
-	}
-	if conf.ReadTimeout == 0 {
-		conf.ReadTimeout = 10000
-	}
-	if conf.WriteTimeout == 0 {
-		conf.WriteTimeout = 10000
-	}
-	if conf.LogSlow == 0 {
-		conf.LogSlow = 100
-	}
 
-	rd := NewRedis(conf, nil)
-	redisInstances[fullName] = rd
-	return copyByLogger(rd, logger)
+	return conf
 }
 
 func copyByLogger(fromRedis *Redis, logger *log.Logger) *Redis {
@@ -182,8 +268,12 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 	decryptedPassword := ""
 	if encryptedPassword != "" {
 		decryptedPassword = u.DecryptAes(encryptedPassword, settedKey, settedIv)
+		if decryptedPassword == "" {
+			log.DefaultLogger.Warning("password is invalid")
+			decryptedPassword = encryptedPassword
+		}
 	} else {
-		log.DefaultLogger.Warning("Password is empty")
+		log.DefaultLogger.Warning("password is empty")
 	}
 
 	var redisReadTimeout time.Duration
@@ -284,7 +374,7 @@ func (rd *Redis) Do(cmd string, values ...interface{}) *Result {
 	_ = conn.Close()
 	usedTime := log.MakeUesdTime(startTime, time.Now())
 	if r.Error == nil {
-		if rd.Config.LogSlow == -1 || usedTime >= float32(rd.Config.LogSlow) {
+		if rd.Config.LogSlow > 0 && usedTime >= float32(rd.Config.LogSlow) {
 			// 记录慢请求日志
 			rd.LogQuery(cmd, values, usedTime)
 		}
