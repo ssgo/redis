@@ -24,11 +24,11 @@ type Config struct {
 	DB           int
 	MaxActive    int
 	MaxIdles     int
-	IdleTimeout  int
-	ConnTimeout  int
-	ReadTimeout  int
-	WriteTimeout int
-	LogSlow      int
+	IdleTimeout  config.Duration
+	ConnTimeout  config.Duration
+	ReadTimeout  config.Duration
+	WriteTimeout config.Duration
+	LogSlow      config.Duration
 	logger       *log.Logger
 }
 
@@ -64,41 +64,15 @@ func (conf *Config) ConfigureBy(setting string) {
 	pwd, _ := urlInfo.User.Password()
 	conf.Password = pwd
 
-	timeout := urlInfo.Query().Get("timeout")
-	if timeout != "" {
-		timeoutValue := 0
-		timeoutUnit := time.Millisecond
-		if strings.HasSuffix(timeout, "ms") {
-			timeoutUnit = time.Millisecond
-			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-		} else if strings.HasSuffix(timeout, "us") {
-			timeoutUnit = time.Microsecond
-			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-		} else if strings.HasSuffix(timeout, "ns") {
-			timeoutUnit = time.Nanosecond
-			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-		} else if strings.HasSuffix(timeout, "s") {
-			timeoutUnit = time.Second
-			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-		} else if strings.HasSuffix(timeout, "m") {
-			timeoutUnit = time.Minute
-			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-		} else {
-			timeoutValue, err = strconv.Atoi(timeout)
-		}
-		if err != nil {
-			conf.logger.Error(err.Error(), "url", setting)
-		} else {
-			timeoutMsValue := int(time.Duration(timeoutValue) * timeoutUnit / time.Millisecond)
-			conf.ConnTimeout = timeoutMsValue
-			conf.ReadTimeout = timeoutMsValue
-			conf.WriteTimeout = timeoutMsValue
-		}
-	}
+	conf.LogSlow = config.Duration(u.Duration(urlInfo.Query().Get("logSlow")))
+	timeout := config.Duration(u.Duration(urlInfo.Query().Get("timeout")))
+	conf.ConnTimeout = timeout
+	conf.ReadTimeout = timeout
+	conf.WriteTimeout = timeout
 }
 
 func (conf *Config) Dsn() string {
-	return fmt.Sprintf("redis://:****@%s/%d", conf.Host, conf.DB)
+	return fmt.Sprintf("redis://:****@%s/%d?timeout=%s&logSlow=%s", conf.Host, conf.DB, conf.ConnTimeout.TimeDuration(), conf.LogSlow.TimeDuration())
 }
 
 type Redis struct {
@@ -178,7 +152,7 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 		conf.WriteTimeout = 10000
 	}
 	if conf.LogSlow == 0 {
-		conf.LogSlow = 100
+		conf.LogSlow = config.Duration(100 * time.Millisecond)
 	}
 
 	rd := NewRedis(conf, nil)
@@ -218,15 +192,6 @@ func parseByName(name string) *Config {
 		if err == nil {
 			if arg2 > 0 && arg2 <= 15 {
 				conf.DB = arg2
-			} else if arg2 > 15 && arg2 < 86400000 {
-				if conf.ConnTimeout == 0 {
-					conf.ConnTimeout = arg2
-				} else {
-					conf.ReadTimeout = arg2
-					conf.WriteTimeout = arg2
-				}
-			} else if arg2 == -1 {
-				conf.ReadTimeout = -1
 			} else {
 				conf.Password = args[i]
 			}
@@ -300,7 +265,7 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 	}
 
 	rd := new(Redis)
-	rd.ReadTimeout = conf.ReadTimeout
+	rd.ReadTimeout = int(conf.ReadTimeout.TimeDuration() / time.Millisecond)
 	rd.pool = conn
 	rd.Config = conf
 	if logger == nil {
@@ -370,7 +335,7 @@ func (rd *Redis) Do(cmd string, values ...interface{}) *Result {
 	_ = conn.Close()
 	usedTime := log.MakeUesdTime(startTime, time.Now())
 	if r.Error == nil {
-		if rd.Config.LogSlow > 0 && usedTime >= float32(rd.Config.LogSlow) {
+		if rd.Config.LogSlow > 0 && usedTime >= float32(rd.Config.LogSlow.TimeDuration()/time.Millisecond) {
 			// 记录慢请求日志
 			rd.LogQuery(cmd, values, usedTime)
 		}

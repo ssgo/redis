@@ -16,7 +16,7 @@ type userInfo struct {
 }
 
 func TestBase(t *testing.T) {
-	os.Setenv("redis_test2", "redis://:@localhost:6379/2?timeout=100ms&database=4")
+	os.Setenv("redis_test2", "redis://:@localhost:6379/2?timeout=10ms&logSlow=10us&database=4")
 	config.ResetConfigEnv()
 
 	redis := redis.GetRedis("test", nil)
@@ -188,7 +188,7 @@ func TestBase(t *testing.T) {
 }
 
 func TestConfigByName(t *testing.T) {
-	redis := redis.GetRedis("localhost:6379:2:1000:500", nil)
+	redis := redis.GetRedis("localhost:6379:2", nil)
 	//fmt.Println(redis.Config)
 	if redis.Error != nil {
 		t.Error("GetRedis error", redis)
