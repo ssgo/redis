@@ -29,10 +29,76 @@ type Config struct {
 	ReadTimeout  int
 	WriteTimeout int
 	LogSlow      int
+	logger       *log.Logger
+}
+
+func (conf *Config) ConfigureBy(setting string) {
+	redisConfigs[setting] = conf
+
+	urlInfo, err := url.Parse(setting)
+	if err != nil {
+		conf.logger.Error(err.Error(), "url", setting)
+		return
+	}
+	if urlInfo.Scheme != "redis" {
+		conf.logger.Error("unsupported scheme", "url", setting)
+		return
+	}
+
+	conf.Host = urlInfo.Host
+
+	dbStr := urlInfo.Query().Get("database")
+	if dbStr == "" && len(urlInfo.Path) > 1 {
+		dbStr = urlInfo.Path[1:]
+	}
+	if len(dbStr) > 0 {
+		db, err := strconv.Atoi(dbStr)
+		if err != nil {
+			conf.logger.Error(err.Error(), "url", setting)
+		}
+		if err == nil && db > 0 && db <= 15 {
+			conf.DB = db
+		}
+	}
+
+	pwd, _ := urlInfo.User.Password()
+	conf.Password = pwd
+
+	timeout := urlInfo.Query().Get("timeout")
+	if timeout != "" {
+		timeoutValue := 0
+		timeoutUnit := time.Millisecond
+		if strings.HasSuffix(timeout, "ms") {
+			timeoutUnit = time.Millisecond
+			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+		} else if strings.HasSuffix(timeout, "us") {
+			timeoutUnit = time.Microsecond
+			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+		} else if strings.HasSuffix(timeout, "ns") {
+			timeoutUnit = time.Nanosecond
+			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+		} else if strings.HasSuffix(timeout, "s") {
+			timeoutUnit = time.Second
+			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+		} else if strings.HasSuffix(timeout, "m") {
+			timeoutUnit = time.Minute
+			timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
+		} else {
+			timeoutValue, err = strconv.Atoi(timeout)
+		}
+		if err != nil {
+			conf.logger.Error(err.Error(), "url", setting)
+		} else {
+			timeoutMsValue := int(time.Duration(timeoutValue) * timeoutUnit / time.Millisecond)
+			conf.ConnTimeout = timeoutMsValue
+			conf.ReadTimeout = timeoutMsValue
+			conf.WriteTimeout = timeoutMsValue
+		}
+	}
 }
 
 func (conf *Config) Dsn() string {
-	return fmt.Sprintf("%s:****:%d", conf.Host, conf.DB)
+	return fmt.Sprintf("redis://:****@%s/%d", conf.Host, conf.DB)
 }
 
 type Redis struct {
@@ -88,7 +154,9 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 
 	var conf *Config
 	if strings.HasPrefix(name, "redis://") {
-		conf = parseByURL(name, logger)
+		conf = new(Config)
+		conf.logger = logger
+		conf.ConfigureBy(name)
 	} else {
 		conf = parseByName(name)
 	}
@@ -116,78 +184,6 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 	rd := NewRedis(conf, nil)
 	redisInstances[fullName] = rd
 	return copyByLogger(rd, logger)
-}
-
-func parseByURL(name string, logger *log.Logger) *Config {
-	conf := redisConfigs[name]
-	if conf == nil {
-		conf = new(Config)
-		redisConfigs[name] = conf
-
-		urlInfo, err := url.Parse(name)
-		if err != nil {
-			logger.Error(err.Error(), "url", name)
-			return conf
-		}
-		if urlInfo.Scheme != "redis" {
-			logger.Error("unsupported scheme", "url", name)
-			return conf
-		}
-
-		conf.Host = urlInfo.Host
-
-		dbStr := urlInfo.Query().Get("database")
-		if dbStr == "" && len(urlInfo.Path) > 1 {
-			dbStr = urlInfo.Path[1:]
-		}
-		if len(dbStr) > 0 {
-			db, err := strconv.Atoi(dbStr)
-			if err != nil {
-				logger.Error(err.Error(), "url", name)
-			}
-			if err == nil && db > 0 && db <= 15 {
-				conf.DB = db
-			}
-		}
-
-		pwd, _ := urlInfo.User.Password()
-		if pwd != "" {
-			conf.Password = pwd
-		}
-
-		timeout := urlInfo.Query().Get("timeout")
-		if timeout != "" {
-			timeoutValue := 0
-			timeoutUnit := time.Millisecond
-			if strings.HasSuffix(timeout, "ms") {
-				timeoutUnit = time.Millisecond
-				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-			} else if strings.HasSuffix(timeout, "us") {
-				timeoutUnit = time.Microsecond
-				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-			} else if strings.HasSuffix(timeout, "ns") {
-				timeoutUnit = time.Nanosecond
-				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-			} else if strings.HasSuffix(timeout, "s") {
-				timeoutUnit = time.Second
-				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-			} else if strings.HasSuffix(timeout, "m") {
-				timeoutUnit = time.Minute
-				timeoutValue, err = strconv.Atoi(timeout[0 : len(timeout)-2])
-			} else {
-				timeoutValue, err = strconv.Atoi(timeout)
-			}
-			if err != nil {
-				logger.Error(err.Error(), "url", name)
-			}else{
-				timeoutMsValue := int( time.Duration(timeoutValue) * timeoutUnit / time.Millisecond)
-				conf.ConnTimeout = timeoutMsValue
-				conf.ReadTimeout = timeoutMsValue
-				conf.WriteTimeout = timeoutMsValue
-			}
-		}
-	}
-	return conf
 }
 
 func parseByName(name string) *Config {

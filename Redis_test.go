@@ -1,7 +1,9 @@
 package redis_test
 
 import (
+	"github.com/ssgo/config"
 	"github.com/ssgo/redis"
+	"os"
 	"testing"
 	"time"
 )
@@ -14,6 +16,9 @@ type userInfo struct {
 }
 
 func TestBase(t *testing.T) {
+	os.Setenv("redis_test2", "redis://:@localhost:6379/2?timeout=100ms&database=4")
+	config.ResetConfigEnv()
+
 	redis := redis.GetRedis("test", nil)
 	redis.Config.LogSlow = -1
 	if redis.Error != nil {
@@ -204,6 +209,26 @@ func TestConfigByName(t *testing.T) {
 
 func TestConfigByUrl(t *testing.T) {
 	redis := redis.GetRedis("redis://:@localhost:6379/2?timeout=100ms&database=3", nil)
+	//fmt.Println(redis.Config)
+	if redis.Error != nil {
+		t.Error("GetRedis error", redis)
+		return
+	}
+
+	redis.SET("redisName", "12345")
+	r := redis.GET("redisName")
+	if r.Error != nil && r.String() != "12345" {
+		t.Error("String", r)
+	}
+
+	num := redis.DEL("redisName")
+	if num != 1 {
+		t.Error("DEL", num)
+	}
+}
+
+func TestConfigByUrl2(t *testing.T) {
+	redis := redis.GetRedis("test2", nil)
 	//fmt.Println(redis.Config)
 	if redis.Error != nil {
 		t.Error("GetRedis error", redis)
