@@ -112,7 +112,7 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 	}
 
 	if redisInstances[name] != nil {
-		return copyByLogger(redisInstances[name], logger)
+		redisInstances[name].CopyByLogger(logger)
 	}
 
 	if len(redisConfigs) == 0 {
@@ -157,7 +157,7 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 
 	rd := NewRedis(conf, nil)
 	redisInstances[fullName] = rd
-	return copyByLogger(rd, logger)
+	return rd.CopyByLogger(logger)
 }
 
 func parseByName(name string) *Config {
@@ -205,19 +205,6 @@ func parseByName(name string) *Config {
 	}
 
 	return conf
-}
-
-func copyByLogger(fromRedis *Redis, logger *log.Logger) *Redis {
-	newRedis := new(Redis)
-	newRedis.ReadTimeout = fromRedis.ReadTimeout
-	newRedis.pool = fromRedis.pool
-	newRedis.Config = fromRedis.Config
-	if logger == nil {
-		newRedis.logger = log.DefaultLogger
-	} else {
-		newRedis.logger = logger
-	}
-	return newRedis
 }
 
 func NewRedis(conf *Config, logger *log.Logger) *Redis {
@@ -275,6 +262,19 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 	}
 
 	return rd
+}
+
+func (rd *Redis) CopyByLogger(logger *log.Logger) *Redis {
+	newRedis := new(Redis)
+	newRedis.ReadTimeout = rd.ReadTimeout
+	newRedis.pool = rd.pool
+	newRedis.Config = rd.Config
+	if logger == nil {
+		newRedis.logger = log.DefaultLogger
+	} else {
+		newRedis.logger = logger
+	}
+	return newRedis
 }
 
 func (rd *Redis) SetLogger(logger *log.Logger) {
