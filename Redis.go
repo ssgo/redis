@@ -112,7 +112,7 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 	}
 
 	if redisInstances[name] != nil {
-		redisInstances[name].CopyByLogger(logger)
+		return redisInstances[name].CopyByLogger(logger)
 	}
 
 	if len(redisConfigs) == 0 {
