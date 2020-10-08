@@ -110,3 +110,7 @@ func (rd *Redis) LLEN(key string) int {
 func (rd *Redis) LRANGE(key string, start, stop int) []Result {
 	return rd.Do("LRANGE "+key, start, stop).Results()
 }
+
+func (rd *Redis) PUBLISH(channel, data string) bool {
+	return rd.Do("PUBLISH "+channel, data).Bool()
+}

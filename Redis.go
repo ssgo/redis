@@ -81,6 +81,16 @@ type Redis struct {
 	Config      *Config
 	logger      *log.Logger
 	Error       error
+	subConn     *redis.PubSubConn
+	//subLock     sync.Mutex
+	subStopChan chan bool
+	subs        map[string]*SubCallbacks
+	SubRunning  bool
+}
+
+type SubCallbacks struct {
+	received func([]byte)
+	reset    func()
 }
 
 // var settedKey = []byte("vpL54DlR2KG{JSAaAX7Tu;*#&DnG`M0o")
@@ -268,6 +278,10 @@ func (rd *Redis) CopyByLogger(logger *log.Logger) *Redis {
 	newRedis := new(Redis)
 	newRedis.ReadTimeout = rd.ReadTimeout
 	newRedis.pool = rd.pool
+	newRedis.subConn = rd.subConn
+	newRedis.subs = rd.subs
+	//newRedis.subLock = rd.subLock
+	newRedis.SubRunning = rd.SubRunning
 	newRedis.Config = rd.Config
 	if logger == nil {
 		newRedis.logger = log.DefaultLogger
