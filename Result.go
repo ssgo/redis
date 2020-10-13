@@ -74,6 +74,9 @@ func (rs *Result) Float64() float64 {
 func (rs *Result) String() string {
 	return string(rs.bytes())
 }
+func (rs *Result) Bytes() []byte {
+	return rs.bytes()
+}
 func (rs *Result) Bool() bool {
 	s := rs.String()
 	switch s {
