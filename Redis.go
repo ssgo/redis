@@ -19,17 +19,17 @@ import (
 var passwords = map[string]string{}
 
 type Config struct {
-	Host         string
-	Password     string
-	DB           int
-	MaxActive    int
-	MaxIdles     int
-	IdleTimeout  config.Duration
-	ConnTimeout  config.Duration
-	ReadTimeout  config.Duration
-	WriteTimeout config.Duration
-	LogSlow      config.Duration
-	logger       *log.Logger
+	Host           string
+	Password       string
+	DB             int
+	MaxActive      int
+	MaxIdle        int
+	IdleTimeout    config.Duration
+	ConnectTimeout config.Duration
+	ReadTimeout    config.Duration
+	WriteTimeout   config.Duration
+	LogSlow        config.Duration
+	logger         *log.Logger
 }
 
 func (conf *Config) ConfigureBy(setting string) {
@@ -65,14 +65,16 @@ func (conf *Config) ConfigureBy(setting string) {
 	conf.Password = pwd
 
 	conf.LogSlow = config.Duration(u.Duration(urlInfo.Query().Get("logSlow")))
-	timeout := config.Duration(u.Duration(urlInfo.Query().Get("timeout")))
-	conf.ConnTimeout = timeout
-	conf.ReadTimeout = timeout
-	conf.WriteTimeout = timeout
+	conf.MaxIdle = u.Int(urlInfo.Query().Get("maxIdle"))
+	conf.MaxActive = u.Int(urlInfo.Query().Get("maxActive"))
+	conf.ConnectTimeout = config.Duration(u.Duration(urlInfo.Query().Get("connectTimeout")))
+	conf.ReadTimeout = config.Duration(u.Duration(urlInfo.Query().Get("readTimeout")))
+	conf.WriteTimeout = config.Duration(u.Duration(urlInfo.Query().Get("writeTimeout")))
+	conf.IdleTimeout = config.Duration(u.Duration(urlInfo.Query().Get("idleTimeout")))
 }
 
 func (conf *Config) Dsn() string {
-	return fmt.Sprintf("redis://:****@%s/%d?timeout=%s&logSlow=%s", conf.Host, conf.DB, conf.ConnTimeout.TimeDuration(), conf.LogSlow.TimeDuration())
+	return fmt.Sprintf("redis://:****@%s/%d?timeout=%s&logSlow=%s", conf.Host, conf.DB, conf.ConnectTimeout.TimeDuration(), conf.LogSlow.TimeDuration())
 }
 
 type Redis struct {
@@ -152,8 +154,14 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 	if conf.Host == "" {
 		conf.Host = "127.0.0.1:6379"
 	}
-	if conf.ConnTimeout == 0 {
-		conf.ConnTimeout = 10000
+	if conf.MaxIdle == 0 {
+		conf.MaxIdle = 20
+	}
+	if conf.MaxActive == 0 {
+		conf.MaxActive = 100
+	}
+	if conf.ConnectTimeout == 0 {
+		conf.ConnectTimeout = 10000
 	}
 	if conf.ReadTimeout == 0 {
 		conf.ReadTimeout = 10000
@@ -236,7 +244,7 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 
 	var redisReadTimeout time.Duration
 	conn := &redis.Pool{
-		MaxIdle:     conf.MaxIdles,
+		MaxIdle:     conf.MaxIdle,
 		MaxActive:   conf.MaxActive,
 		IdleTimeout: time.Millisecond * time.Duration(conf.IdleTimeout),
 		Dial: func() (redis.Conn, error) {
@@ -246,7 +254,7 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 				redisReadTimeout = time.Millisecond * time.Duration(0)
 			}
 			c, err := redis.Dial("tcp", conf.Host,
-				redis.DialConnectTimeout(time.Millisecond*time.Duration(conf.ConnTimeout)),
+				redis.DialConnectTimeout(time.Millisecond*time.Duration(conf.ConnectTimeout)),
 				redis.DialReadTimeout(redisReadTimeout),
 				redis.DialWriteTimeout(time.Millisecond*time.Duration(conf.WriteTimeout)),
 				redis.DialDatabase(conf.DB),
