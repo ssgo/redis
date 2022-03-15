@@ -49,9 +49,18 @@ func (rd *Redis) Start() {
 
 func (rd *Redis) receiveSub(subStartChan chan bool) {
 	for {
+		if !rd.SubRunning {
+			break
+		}
+
 		// 开始接收订阅数据
 		if rd.subConn == nil {
-			rd.subConn = &redis.PubSubConn{Conn: rd.pool.Get()}
+			conn := rd.pool.Get()
+			if conn.Err() != nil {
+				time.Sleep(time.Second)
+				continue
+			}
+			rd.subConn = &redis.PubSubConn{Conn: conn}
 			// 重新订阅
 			if len(rd.subs) > 0 {
 				subs := make([]interface{}, 0)

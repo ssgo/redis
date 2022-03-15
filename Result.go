@@ -174,6 +174,9 @@ func (rs *Result) IntMap() map[string]int {
 func (rs *Result) bytes() []byte {
 	if rs.bytesData != nil {
 		return rs.bytesData
+	}else if rs.bytesDatas != nil {
+		buf, _ := json.Marshal(rs.Strings())
+		return buf
 	}
 	return []byte{}
 }
