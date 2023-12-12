@@ -343,7 +343,7 @@ func (rd *Redis) GetConnection() redis.Conn {
 
 func (rd *Redis) Do(cmd string, values ...interface{}) *Result {
 	if rd.pool == nil {
-		err := errors.New("operat on a bad redis pool")
+		err := errors.New("operate on a bad redis pool")
 		rd.LogQueryError(err.Error(), cmd, values, 0)
 		return &Result{Error: err}
 	}
