@@ -59,10 +59,10 @@ func (rd *Redis) HGET(key, field string) *Result {
 	return rd.Do("HGET "+key, field)
 }
 func (rd *Redis) HSET(key, field string, value interface{}) bool {
-	return rd.Do("HSET "+key, field, value).Bool()
+	return rd.Do("HSET "+key, field, value).Error == nil
 }
 func (rd *Redis) HSETNX(key, field string, value interface{}) bool {
-	return rd.Do("HSETNX "+key, field, value).Bool()
+	return rd.Do("HSETNX "+key, field, value).Error == nil
 }
 func (rd *Redis) HMGET(key string, fields ...string) []Result {
 	return rd.Do("HMGET", append(append([]interface{}{}, key), StringsToInterfaces(fields)...)...).Results()
