@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -78,6 +79,7 @@ func (conf *Config) Dsn() string {
 }
 
 type Redis struct {
+	name        string
 	pool        *redis.Pool
 	ReadTimeout int
 	Config      *Config
@@ -117,14 +119,18 @@ func SetEncryptKeys(key, iv []byte) {
 
 var redisConfigs = make(map[string]*Config)
 var redisInstances = make(map[string]*Redis)
+var redisInstancesLock = sync.RWMutex{}
 
 func GetRedis(name string, logger *log.Logger) *Redis {
 	if logger == nil {
 		logger = log.DefaultLogger
 	}
 
-	if redisInstances[name] != nil {
-		return redisInstances[name].CopyByLogger(logger)
+	redisInstancesLock.RLock()
+	oldConn := redisInstances[name]
+	redisInstancesLock.RUnlock()
+	if oldConn != nil {
+		return oldConn.CopyByLogger(logger)
 	}
 
 	if len(redisConfigs) == 0 {
@@ -174,7 +180,10 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 	}
 
 	rd := NewRedis(conf, nil)
+	rd.name = fullName
+	redisInstancesLock.Lock()
 	redisInstances[fullName] = rd
+	redisInstancesLock.Unlock()
 	return rd.CopyByLogger(logger)
 }
 
@@ -327,6 +336,9 @@ func (rd *Redis) Destroy() error {
 	if err != nil {
 		rd.LogError(err.Error())
 	}
+	redisInstancesLock.Lock()
+	delete(redisInstances, rd.name)
+	redisInstancesLock.Unlock()
 	return err
 }
 
