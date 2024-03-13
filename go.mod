@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/gomodule/redigo v1.8.8
-	github.com/ssgo/config v0.6.12
-	github.com/ssgo/log v0.6.12
-	github.com/ssgo/u v0.6.12
+	github.com/ssgo/config v1.7.1
+	github.com/ssgo/log v1.7.1
+	github.com/ssgo/u v1.7.1
 )
