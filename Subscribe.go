@@ -1,9 +1,10 @@
 package redis
 
 import (
-	"github.com/gomodule/redigo/redis"
 	"strings"
 	"time"
+
+	"github.com/gomodule/redigo/redis"
 )
 
 func (rd *Redis) Subscribe(name string, reset func(), received func([]byte)) bool {
@@ -55,8 +56,8 @@ func (rd *Redis) receiveSub(subStartChan chan bool) {
 
 		// 开始接收订阅数据
 		if rd.subConn == nil {
-			conn := rd.pool.Get()
-			if conn.Err() != nil {
+			conn, err := rd.GetConnection()
+			if err != nil {
 				time.Sleep(time.Second)
 				continue
 			}
@@ -68,7 +69,13 @@ func (rd *Redis) receiveSub(subStartChan chan bool) {
 					subs = append(subs, k)
 				}
 				//fmt.Println("     @@@@@", subs)
-				_ = rd.subConn.Subscribe(subs...)
+				err = rd.subConn.Subscribe(subs...)
+				if err != nil {
+					rd.subConn.Close()
+					rd.subConn = nil
+					time.Sleep(time.Second)
+					continue
+				}
 				// 重新连接时调用重置数据的回掉
 				for _, v := range rd.subs {
 					if v.reset != nil {

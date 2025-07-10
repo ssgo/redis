@@ -4,13 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ssgo/log"
+	"io"
+	"net"
 	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/ssgo/log"
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/ssgo/config"
@@ -256,6 +260,13 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 		MaxIdle:     conf.MaxIdle,
 		MaxActive:   conf.MaxActive,
 		IdleTimeout: time.Millisecond * time.Duration(conf.IdleTimeout),
+		// TestOnBorrow: func(c redis.Conn, t time.Time) error {
+		// 	if time.Since(t) < time.Second*5 {
+		// 		return nil
+		// 	}
+		// 	_, err := c.Do("PING")
+		// 	return err
+		// },
 		Dial: func() (redis.Conn, error) {
 			if conf.ReadTimeout > 0 {
 				redisReadTimeout = time.Millisecond * time.Duration(conf.ReadTimeout)
@@ -293,6 +304,7 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 
 func (rd *Redis) CopyByLogger(logger *log.Logger) *Redis {
 	newRedis := new(Redis)
+	newRedis.name = rd.name
 	newRedis.ReadTimeout = rd.ReadTimeout
 	newRedis.pool = rd.pool
 	newRedis.subConn = rd.subConn
@@ -346,11 +358,63 @@ func (rd *Redis) GetPool() *redis.Pool {
 	return rd.pool
 }
 
-func (rd *Redis) GetConnection() redis.Conn {
+func (rd *Redis) GetNewConnection() (redis.Conn, error) {
 	if rd.pool == nil {
-		return nil
+		return nil, errors.New("redis pool is not initialized")
 	}
-	return rd.pool.Get()
+	c, err := rd.pool.Dial()
+	if err == nil {
+		err = c.Err()
+	}
+	if err != nil {
+		if c != nil {
+			_ = c.Close()
+		}
+		return nil, err
+	}
+	return c, nil
+}
+
+func (rd *Redis) GetConnection() (redis.Conn, error) {
+	if rd.pool == nil {
+		return nil, errors.New("redis pool is not initialized")
+	}
+	c := rd.pool.Get()
+	err := c.Err()
+	if err != nil {
+		if c != nil {
+			_ = c.Close()
+		}
+		return nil, err
+	}
+	return c, nil
+}
+
+func shouldRetry(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// 网络错误
+	if errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+
+	// 超时错误
+	if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+		return true
+	}
+
+	// Redis特定可恢复错误
+	if errs, ok := err.(redis.Error); ok {
+		switch {
+		case strings.HasPrefix(string(errs), "LOADING"),
+			strings.HasPrefix(string(errs), "CLUSTERDOWN"):
+			return true
+		}
+	}
+
+	return false
 }
 
 func (rd *Redis) Do(cmd string, values ...interface{}) *Result {
@@ -360,13 +424,7 @@ func (rd *Redis) Do(cmd string, values ...interface{}) *Result {
 		return &Result{Error: err}
 	}
 	startTime := time.Now()
-	conn := rd.pool.Get()
-	if conn.Err() != nil {
-		rd.LogError(conn.Err().Error())
-		return &Result{Error: conn.Err()}
-	}
-	r := rd.do(conn, cmd, values...)
-	_ = conn.Close()
+	r := rd.do(cmd, values...)
 	usedTime := log.MakeUesdTime(startTime, time.Now())
 	if r.Error == nil {
 		if rd.Config.LogSlow > 0 && usedTime >= float32(rd.Config.LogSlow.TimeDuration()/time.Millisecond) {
@@ -379,7 +437,7 @@ func (rd *Redis) Do(cmd string, values ...interface{}) *Result {
 	return r
 }
 
-func (rd *Redis) do(conn redis.Conn, cmd string, values ...interface{}) *Result {
+func (rd *Redis) do(cmd string, values ...interface{}) *Result {
 	cmdArr := strings.Split(cmd, " ")
 	if len(cmdArr) > 1 {
 		cmd = cmdArr[0]
@@ -400,8 +458,26 @@ func (rd *Redis) do(conn redis.Conn, cmd string, values ...interface{}) *Result 
 	} else if strings.Contains(cmd, "SET") {
 		_checkValue(values, len(values)-1)
 	}
-	replyData, err := conn.Do(cmd, values...)
+
+	// 从连接池获取
+	conn, err := rd.GetConnection()
+	var replyData interface{}
+	if err == nil {
+		replyData, err = conn.Do(cmd, values...)
+		conn.Close()
+	}
+
+	if err != nil && shouldRetry(err) {
+		// 拿全新的连接重试（如果服务器重启可自动恢复）
+		conn, err = rd.GetNewConnection()
+		if err == nil {
+			replyData, err = conn.Do(cmd, values...)
+			conn.Close()
+		}
+	}
+
 	if err != nil {
+		rd.LogError(err.Error())
 		return &Result{Error: err}
 	}
 
