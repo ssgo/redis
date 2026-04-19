@@ -44,8 +44,14 @@ func (rd *Redis) GETSET(key string, value interface{}) *Result {
 func (rd *Redis) INCR(key string) int64 {
 	return rd.Do("INCR " + key).Int64()
 }
-func (rd *Redis) DECR(key string) int64 {
-	return rd.Do("DECR " + key).Int64()
+func (rd *Redis) INCRBY(key string, delta int64) int64 {
+	return rd.Do("INCRBY "+key, delta).Int64()
+}
+func (rd *Redis) DECR(key string, delta int64) int64 {
+	return rd.Do("DECR "+key, delta).Int64()
+}
+func (rd *Redis) DECRBY(key string, delta int64) int64 {
+	return rd.Do("DECRBY "+key, delta).Int64()
 }
 
 func (rd *Redis) MGET(keys ...string) []Result {
@@ -88,8 +94,14 @@ func (rd *Redis) HEXISTS(key, field string) bool {
 func (rd *Redis) HINCR(key, field string) int64 {
 	return rd.Do("HINCRBY "+key, field, 1).Int64()
 }
+func (rd *Redis) HINCRBY(key, field string, delta int64) int64 {
+	return rd.Do("HINCRBY "+key, field, delta).Int64()
+}
 func (rd *Redis) HDECR(key, field string) int64 {
 	return rd.Do("HDECRBY "+key, field, 1).Int64()
+}
+func (rd *Redis) HDECRBY(key, field string, delta int64) int64 {
+	return rd.Do("HDECRBY "+key, field, delta).Int64()
 }
 
 func (rd *Redis) LPUSH(key string, values ...string) int {

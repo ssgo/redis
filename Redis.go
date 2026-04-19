@@ -21,11 +21,12 @@ import (
 	"github.com/ssgo/u"
 )
 
-var passwords = map[string]string{}
+// var passwords = map[string]string{}
 
 type Config struct {
 	Host           string
 	Password       string
+	pwd            *u.SafeBuf
 	DB             int
 	MaxActive      int
 	MaxIdle        int
@@ -66,9 +67,7 @@ func (conf *Config) ConfigureBy(setting string) {
 		}
 	}
 
-	pwd, _ := urlInfo.User.Password()
-	conf.Password = pwd
-
+	conf.Password, _ = urlInfo.User.Password()
 	conf.LogSlow = config.Duration(u.Duration(urlInfo.Query().Get("logSlow")))
 	conf.MaxIdle = u.Int(urlInfo.Query().Get("maxIdle"))
 	conf.MaxActive = u.Int(urlInfo.Query().Get("maxActive"))
@@ -101,25 +100,15 @@ type SubCallbacks struct {
 	reset    func()
 }
 
-// var settedKey = []byte("vpL54DlR2KG{JSAaAX7Tu;*#&DnG`M0o")
-// var settedIv = []byte("@z]zv@10-K.5Al0Dm`@foq9k\"VRfJ^~j")
-var settedKey = []byte("?GQ$0K0GgLdO=f+~L68PLm$uhKr4'=tV")
-var settedIv = []byte("VFs7@sK61cj^f?HZ")
-var keysSetted = false
+var confAes, _ = u.NewAESGCMAndEraseKey([]byte("?GQ$0K0GgLdO=f+~L68PLm$uhKr4'=tV"), []byte("VFs7@sK61cj^f?HZ"))
+var keysSetted = sync.Once{}
 
 func SetEncryptKeys(key, iv []byte) {
-	if !keysSetted {
-		settedKey = key
-		settedIv = iv
-		keysSetted = true
-	}
+	keysSetted.Do(func() {
+		confAes.Close()
+		confAes, _ = u.NewAESGCMAndEraseKey(key, iv)
+	})
 }
-
-//var enabledLogs = true
-//
-//func EnableLogs(enabled bool) {
-//	enabledLogs = enabled
-//}
 
 var redisConfigs = make(map[string]*Config)
 var redisInstances = make(map[string]*Redis)
@@ -157,9 +146,12 @@ func GetRedis(name string, logger *log.Logger) *Redis {
 		conf = parseByName(name)
 	}
 
-	passId := u.UniqueId()
-	passwords[passId] = conf.Password
-	conf.Password = passId
+	if pwd, err := confAes.Decrypt([]byte(conf.Password)); err == nil {
+		conf.pwd = pwd
+	} else {
+		conf.pwd = u.NewSafeBuf([]byte(conf.Password))
+	}
+	conf.Password = ""
 
 	if conf.Host == "" {
 		conf.Host = "127.0.0.1:6379"
@@ -243,19 +235,6 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 		logger = log.DefaultLogger
 	}
 
-	encryptedPassword := passwords[conf.Password]
-	decryptedPassword := ""
-	if encryptedPassword != "" {
-		decryptedPassword = u.DecryptAes(encryptedPassword, settedKey, settedIv)
-		if decryptedPassword == "" {
-			log.DefaultLogger.Warning("password is invalid")
-			decryptedPassword = encryptedPassword
-		}
-	} else {
-		log.DefaultLogger.Warning("password is empty")
-	}
-
-	var redisReadTimeout time.Duration
 	conn := &redis.Pool{
 		MaxIdle:     conf.MaxIdle,
 		MaxActive:   conf.MaxActive,
@@ -268,18 +247,18 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 		// 	return err
 		// },
 		Dial: func() (redis.Conn, error) {
-			if conf.ReadTimeout > 0 {
-				redisReadTimeout = time.Millisecond * time.Duration(conf.ReadTimeout)
-			} else {
-				redisReadTimeout = time.Millisecond * time.Duration(0)
-			}
-			c, err := redis.Dial("tcp", conf.Host,
-				redis.DialConnectTimeout(time.Millisecond*time.Duration(conf.ConnectTimeout)),
-				redis.DialReadTimeout(redisReadTimeout),
-				redis.DialWriteTimeout(time.Millisecond*time.Duration(conf.WriteTimeout)),
+			opts := []redis.DialOption{
+				redis.DialConnectTimeout(time.Millisecond * time.Duration(conf.ConnectTimeout)),
+				redis.DialReadTimeout(time.Millisecond * time.Duration(conf.ReadTimeout)),
+				redis.DialWriteTimeout(time.Millisecond * time.Duration(conf.WriteTimeout)),
 				redis.DialDatabase(conf.DB),
-				redis.DialPassword(decryptedPassword),
-			)
+			}
+			if conf.pwd != nil {
+				pwdBuf := conf.pwd.Open()
+				defer pwdBuf.Close()
+				opts = append(opts, redis.DialPassword(pwdBuf.String()))
+			}
+			c, err := redis.Dial("tcp", conf.Host, opts...)
 			if err != nil {
 				log.DefaultLogger.DBError(err.Error(), "redis", conf.Dsn(), "", nil, 0)
 				return nil, err
