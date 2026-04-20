@@ -239,18 +239,11 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 		MaxIdle:     conf.MaxIdle,
 		MaxActive:   conf.MaxActive,
 		IdleTimeout: time.Millisecond * time.Duration(conf.IdleTimeout),
-		// TestOnBorrow: func(c redis.Conn, t time.Time) error {
-		// 	if time.Since(t) < time.Second*5 {
-		// 		return nil
-		// 	}
-		// 	_, err := c.Do("PING")
-		// 	return err
-		// },
 		Dial: func() (redis.Conn, error) {
 			opts := []redis.DialOption{
-				redis.DialConnectTimeout(time.Millisecond * time.Duration(conf.ConnectTimeout)),
-				redis.DialReadTimeout(time.Millisecond * time.Duration(conf.ReadTimeout)),
-				redis.DialWriteTimeout(time.Millisecond * time.Duration(conf.WriteTimeout)),
+				redis.DialConnectTimeout(time.Millisecond * time.Duration(max(conf.ConnectTimeout, 0))),
+				redis.DialReadTimeout(time.Millisecond * time.Duration(max(conf.ReadTimeout, 0))),
+				redis.DialWriteTimeout(time.Millisecond * time.Duration(max(conf.WriteTimeout, 0))),
 				redis.DialDatabase(conf.DB),
 			}
 			if conf.pwd != nil {
@@ -263,7 +256,6 @@ func NewRedis(conf *Config, logger *log.Logger) *Redis {
 				log.DefaultLogger.DBError(err.Error(), "redis", conf.Dsn(), "", nil, 0)
 				return nil, err
 			}
-			//c.Do("SELECT", REDIS_DB)
 			return c, nil
 		},
 	}
